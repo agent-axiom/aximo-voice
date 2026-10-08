@@ -195,7 +195,11 @@ async function setup($, state, language) {
         ? ['powershell.exe', '-NoProfile', '-File', `${$.plugin.root}/scripts/install-runtime.ps1`]
         : ['sh', `${$.plugin.root}/scripts/install-runtime.sh`];
       const installed = await $.process.run(argv, { timeoutMs: 600000 });
-      if (installed.exitCode !== 0) throw new Error('A verified runtime is not available for this source preview. See docs/installation.md for build artifacts and release status.');
+      if (installed.exitCode !== 0) {
+        const detail = typeof installed.stderr === 'string'
+          ? installed.stderr.replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '').trim().slice(0, 350) : '';
+        throw new Error(detail || 'Runtime installation failed. See docs/installation.md for build artifacts and release status.');
+      }
     }
     if (state.ended || epoch !== state.generation) return;
     parseResult(await $.process.run([state.helper, 'setup-model', '--engine', engine], { timeoutMs: 600000 }));

@@ -97,3 +97,8 @@ test('automated, remote and unclassified command origins cannot capture audio',a
  const h=harness();for(const origin of [{kind:'plugin',name:'other'},{kind:'bridge'},{kind:'sdk'},null]) await h.command('start',origin);
  assert.equal(h.tasks.length,0);assert.equal(count(h,'doctor'),0);assert.equal(count(h,'record'),0);
 });
+
+test('runtime installation errors are shown and model download never follows a failure',async()=>{
+ const h=harness({exists:false,ask:'Install and download',helperResponse:{exitCode:1,stdout:'',stderr:'Runtime checksum mismatch; runtime was not installed.'}});
+ await h.command('setup en');assert.match(h.statuses.at(-1),/checksum mismatch/);assert.equal(count(h,'setup-model'),0);
+});

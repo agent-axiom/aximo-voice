@@ -103,6 +103,7 @@ dependencies = [
  "fs2",
  "hound",
  "libc",
+ "ort",
  "reqwest",
  "serde",
  "serde_json",

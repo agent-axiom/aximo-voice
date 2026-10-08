@@ -39,8 +39,10 @@ See [Anthropic's official install guide](https://code.claude.com/docs/en/plugins
 
 1. Clone this repository and build the helper as described in [development](development.md),
    or obtain the matching artifact from a successful native-build workflow.
-2. Copy only the verified platform helper into `bin/aximo-voice-native`
-   (`bin/aximo-voice-native.exe` on Windows). Never rename another platform's binary.
+2. Extract the verified platform runtime archive into `bin/`, including its
+   helper, ONNX runtime libraries and notices. The helper must be named
+   `bin/aximo-voice-native` (`bin/aximo-voice-native.exe` on Windows). Do not copy
+   only the executable or rename another platform's binary.
 3. Start `claude --plugin-dir /absolute/path/to/aximo-voice`.
 4. Run `/aximo-voice setup en` or `setup ru`. An existing developer helper is reused;
    model download still needs consent.
@@ -48,6 +50,12 @@ See [Anthropic's official install guide](https://code.claude.com/docs/en/plugins
 ## Platform matrix
 
 Build targets: macOS Apple Silicon, macOS Intel, Linux x86-64, Windows x86-64.
+Apple Silicon requires macOS 14.0 or newer with the pinned official ONNX runtime.
+Intel builds target macOS 13.4 or newer, subject to their CI verification. Linux
+builds are checked on Ubuntu 24.04; other distributions need compatible system
+libraries. Each runtime is packaged with its required non-system libraries. Intel Mac builds
+compile the pinned official ONNX Runtime source in CI because that runtime version
+has no official Intel Mac archive. End users do not build it themselves.
 A build artifact is not evidence of working microphone access. The release checklist
 requires actual native microphone tests on every advertised platform. Linux needs a
 working audio stack and ALSA runtime; headless containers and remote SSH sessions

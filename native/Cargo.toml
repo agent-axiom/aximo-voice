@@ -20,6 +20,8 @@ cpal = "0.15.3"
 directories = "6"
 fs2 = "0.4"
 hound = "3.5"
+# Configure privacy before aximo-inference creates its first ONNX session.
+ort = "=2.0.0-rc.12"
 # Honor the operating system's trusted roots, including managed enterprise CAs.
 # TLS validation stays enabled; downloaded models also need pinned SHA-256.
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls-native-roots"] }

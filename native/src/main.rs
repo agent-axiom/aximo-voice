@@ -175,6 +175,7 @@ fn record(
     });
     let result = (|| {
         require_model(kind, &model_path)?;
+        initialize_private_inference()?;
         let engine = RuntimeEngineFactory.build(&EngineSpec { kind, model_path })?;
         if session.cancelled()
             || cancelled_signal.load(Ordering::Relaxed)
@@ -231,6 +232,19 @@ fn require_model(kind: EngineKind, path: &std::path::Path) -> Result<()> {
                 "en"
             }
         );
+    }
+    Ok(())
+}
+
+fn initialize_private_inference() -> Result<()> {
+    // Configure the process before any ONNX session. Microsoft Windows builds
+    // can enable telemetry by default; never trust an already-committed config.
+    if !ort::init()
+        .with_name("aximo-voice")
+        .with_telemetry(false)
+        .commit()
+    {
+        bail!("ONNX Runtime was already configured; refusing inference because disabling telemetry could not be guaranteed");
     }
     Ok(())
 }
@@ -308,6 +322,7 @@ fn transcribe_file(
     });
     let result = (|| {
         require_model(kind, &model_path)?;
+        initialize_private_inference()?;
         let engine = RuntimeEngineFactory.build(&EngineSpec { kind, model_path })?;
         session.set_state("transcribing")?;
         let result = engine.transcribe_short(ShortAudioRequest {
@@ -329,6 +344,16 @@ fn transcribe_file(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn refuses_inference_when_runtime_configuration_is_already_committed() {
+        // Committing options creates no model or native session.
+        assert!(initialize_private_inference().is_ok());
+        assert!(initialize_private_inference()
+            .unwrap_err()
+            .to_string()
+            .contains("disabling telemetry could not be guaranteed"));
+    }
 
     #[test]
     fn bounded_output_preserves_unicode_without_controls() {

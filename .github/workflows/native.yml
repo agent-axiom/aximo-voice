@@ -1,7 +1,7 @@
 name: Native builds
 on:
   push:
-    branches: [main, 'feat/**', 'fix/**']
+    branches: [main]
   pull_request:
   workflow_dispatch:
 permissions:
@@ -18,22 +18,29 @@ jobs:
         include:
           - runner: ubuntu-24.04
             platform: linux-x86_64
+            timeout: 45
           - runner: macos-15
             platform: macos-aarch64
+            timeout: 45
           - runner: macos-15-intel
             platform: macos-x86_64
+            timeout: 150
           - runner: windows-2022
             platform: windows-x86_64
+            timeout: 45
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 45
+    timeout-minutes: ${{ matrix.timeout }}
     env:
       CARGO_BUILD_JOBS: '2'
       ORT_LOG: error
+      AXIMO_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
     defaults:
       run:
         shell: bash
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
@@ -44,6 +51,9 @@ jobs:
         with:
           toolchain: '1.94.1'
           components: rustfmt, clippy
+          cache-workspaces: 'native -> target'
+      - name: Provision verified CPU ONNX Runtime
+        run: node scripts/provision-onnx.mjs '${{ matrix.platform }}'
       - run: cargo fmt --manifest-path native/Cargo.toml --check
       - run: cargo test --manifest-path native/Cargo.toml --locked
       - run: cargo clippy --manifest-path native/Cargo.toml --locked --all-targets -- -D warnings
@@ -53,13 +63,16 @@ jobs:
       - name: Native real-model wiring smoke
         if: runner.os == 'Linux'
         run: |
-          node scripts/smoke-native.mjs dist/aximo-voice-native-linux-x86_64 parakeet
-          node scripts/smoke-native.mjs dist/aximo-voice-native-linux-x86_64 gigaam
+          env -u ORT_LIB_LOCATION -u LD_LIBRARY_PATH -u DYLD_LIBRARY_PATH node scripts/smoke-native.mjs dist/runtime/aximo-voice-native parakeet
+          env -u ORT_LIB_LOCATION -u LD_LIBRARY_PATH -u DYLD_LIBRARY_PATH node scripts/smoke-native.mjs dist/runtime/aximo-voice-native gigaam
       - uses: actions/upload-artifact@v7
         with:
           name: aximo-voice-${{ matrix.platform }}
           path: |
-            dist/*
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.sha256
+            dist/*.build.json
             native/Cargo.lock
           if-no-files-found: error
           retention-days: 14

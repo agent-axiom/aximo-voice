@@ -7,3 +7,5 @@ bin/
 *.pcm
 dist/
 SOURCE_MANIFEST.json
+
+.runtime-setup.*/

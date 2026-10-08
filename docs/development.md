@@ -20,11 +20,14 @@ cargo test --manifest-path native/Cargo.toml --locked
 cargo clippy --manifest-path native/Cargo.toml --all-targets --locked -- -D warnings
 cargo build --manifest-path native/Cargo.toml --release --locked
 mkdir -p bin
+# For a portable install, use the complete verified CI runtime archive.
+# A developer-built helper may require its build-time runtime library paths.
 cp native/target/release/aximo-voice-native bin/
 claude --plugin-dir "$PWD"
 ```
 
-Windows: copy `aximo-voice-native.exe` instead. The engine git revision, exact
+Windows: use the complete matching runtime bundle, including its DLLs; copying
+only `aximo-voice-native.exe` is insufficient. The engine git revision, exact
 transcribe-rs version, Cargo.lock and model manifests are reviewed source inputs.
 No workflow publishes a release, a package registry entry, or a marketplace listing.
 
