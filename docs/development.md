@@ -15,16 +15,31 @@ npm test
 npm run check
 claude plugin validate .
 claude plugin test .
+
+# Linux developer build; the CI workflow covers all four platforms.
+node scripts/provision-onnx.mjs linux-x86_64
+export AXIMO_ONNX_ROOT="$PWD/native/target/onnx/linux-x86_64/runtime"
+export ORT_LIB_LOCATION="$AXIMO_ONNX_ROOT/lib"
+export ORT_PREFER_DYNAMIC_LINK=1
+export LD_LIBRARY_PATH="$ORT_LIB_LOCATION"
+export RUSTFLAGS='-C link-arg=-Wl,-rpath,$ORIGIN'
 cargo fmt --manifest-path native/Cargo.toml --check
 cargo test --manifest-path native/Cargo.toml --locked
 cargo clippy --manifest-path native/Cargo.toml --all-targets --locked -- -D warnings
 cargo build --manifest-path native/Cargo.toml --release --locked
+node scripts/package-native.mjs linux-x86_64
 mkdir -p bin
-# For a portable install, use the complete verified CI runtime archive.
-# A developer-built helper may require its build-time runtime library paths.
-cp native/target/release/aximo-voice-native bin/
+cp dist/runtime/* bin/
 claude --plugin-dir "$PWD"
 ```
+
+For macOS, provision `macos-aarch64` or `macos-x86_64`, use that platform in
+`AXIMO_ONNX_ROOT`, replace `LD_LIBRARY_PATH` with `DYLD_LIBRARY_PATH`, and set
+`RUSTFLAGS='-C link-arg=-Wl,-rpath,@executable_path'`. Set
+`MACOSX_DEPLOYMENT_TARGET=14.0` for Apple Silicon or `13.4` for Intel.
+The provisioner prints the exact environment locally and sets it automatically in
+GitHub Actions. Intel builds compile the same pinned ONNX source release; the
+first build takes longer. These are contributor steps, never end-user setup.
 
 Windows: use the complete matching runtime bundle, including its DLLs; copying
 only `aximo-voice-native.exe` is insufficient. The engine git revision, exact

@@ -2,11 +2,12 @@ $ErrorActionPreference = 'Stop'
 $Root = Join-Path ([IO.Path]::GetTempPath()) ('aximo installer tests ' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $Root | Out-Null
 $Installer = Join-Path (Split-Path $PSScriptRoot -Parent) 'scripts/install-runtime.ps1'
-$script:FixtureArchive = ''
+$PreviousArchive = $env:AXIMO_TEST_ARCHIVE
+$env:AXIMO_TEST_ARCHIVE = ''
 # No network is reached by these installer tests.
 function Invoke-WebRequest {
     param([string]$Uri, [string]$OutFile, [switch]$UseBasicParsing, [int]$TimeoutSec)
-    Copy-Item -LiteralPath $script:FixtureArchive -Destination $OutFile
+    Copy-Item -LiteralPath $env:AXIMO_TEST_ARCHIVE -Destination $OutFile
 }
 function Assert-True($Condition, [string]$Message) { if (-not $Condition) { throw $Message } }
 try {
@@ -20,14 +21,14 @@ try {
         $Helper = if ($Case -eq 'startup') { $Bad } else { $Good }
         Copy-Item $Helper (Join-Path $Payload 'aximo-voice-native.exe')
         Set-Content -Path (Join-Path $Payload 'onnxruntime.dll') -Value 'fixture dependency'
-        $script:FixtureArchive = Join-Path $Dir 'fixture.zip'
-        Compress-Archive -Path (Join-Path $Payload '*') -DestinationPath $script:FixtureArchive
+        $env:AXIMO_TEST_ARCHIVE = Join-Path $Dir 'fixture.zip'
+        Compress-Archive -Path (Join-Path $Payload '*') -DestinationPath $env:AXIMO_TEST_ARCHIVE
         if ($Case -eq 'traversal') {
             Add-Type -AssemblyName System.IO.Compression.FileSystem
-            $Zip = [IO.Compression.ZipFile]::Open($script:FixtureArchive, [IO.Compression.ZipArchiveMode]::Update)
+            $Zip = [IO.Compression.ZipFile]::Open($env:AXIMO_TEST_ARCHIVE, [IO.Compression.ZipArchiveMode]::Update)
             try { $Entry = $Zip.CreateEntry('../escape'); $Writer = New-Object IO.StreamWriter($Entry.Open()); $Writer.Write('bad'); $Writer.Dispose() } finally { $Zip.Dispose() }
         }
-        $Hash = (Get-FileHash $script:FixtureArchive -Algorithm SHA256).Hash.ToLowerInvariant()
+        $Hash = (Get-FileHash $env:AXIMO_TEST_ARCHIVE -Algorithm SHA256).Hash.ToLowerInvariant()
         if ($Case -eq 'checksum') { $Hash = 'a' * 64 }
         $Manifest = if ($Case -eq 'empty') { '# source preview' } else { "windows-x86_64 $Hash https://github.com/agent-axiom/aximo-voice/releases/download/v0.1.0/aximo-voice-native-windows-x86_64.zip" }
         Set-Content -Path (Join-Path $Scripts 'runtime-manifest.txt') -Value $Manifest
@@ -46,4 +47,7 @@ try {
         Write-Host "PASS $Case"
     }
     $global:LASTEXITCODE = 0
-} finally { Remove-Item -LiteralPath $Root -Recurse }
+} finally {
+    $env:AXIMO_TEST_ARCHIVE = $PreviousArchive
+    Remove-Item -LiteralPath $Root -Recurse
+}

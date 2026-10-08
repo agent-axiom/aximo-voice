@@ -32,7 +32,13 @@ if (entry.mode === 'archive') {
   await mkdir(root);
   // The archive is authenticated before extraction. lib symlinks are resolved
   // to regular files later, so the shipped bundle needs no symlink handling.
-  run('tar', ['-xf', archive, '--strip-components=1', '-C', root]);
+  // Git Bash's GNU tar treats a Windows drive colon as a remote host and
+  // cannot unpack ZIPs. The native Windows bsdtar supports both local paths
+  // and ZIP extraction; do not select a different tar through PATH.
+  const tar = process.platform === 'win32'
+    ? join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe')
+    : 'tar';
+  run(tar, ['-xf', archive, '--strip-components=1', '-C', root]);
 } else {
   if (platform !== 'macos-x86_64' || entry.commit !== manifest.commit) throw Error('Unexpected source-build target');
   const source = join(base, 'source');
