@@ -1,0 +1,52 @@
+{
+  "parakeet": {
+    "repo": "istupakov/parakeet-tdt-0.6b-v3-onnx",
+    "revision": "8f23f0c03c8761650bdb5b40aaf3e40d2c15f1ce",
+    "license": "cc-by-4.0",
+    "files": [
+      {
+        "name": "encoder-model.int8.onnx",
+        "source": "encoder-model.int8.onnx",
+        "size": 652183999,
+        "sha256": "6139d2fa7e1b086097b277c7149725edbab89cc7c7ae64b23c741be4055aff09"
+      },
+      {
+        "name": "decoder_joint-model.int8.onnx",
+        "source": "decoder_joint-model.int8.onnx",
+        "size": 18202004,
+        "sha256": "eea7483ee3d1a30375daedc8ed83e3960c91b098812127a0d99d1c8977667a70"
+      },
+      {
+        "name": "nemo128.onnx",
+        "source": "nemo128.onnx",
+        "size": 139764,
+        "sha256": "a9fde1486ebfcc08f328d75ad4610c67835fea58c73ba57e3209a6f6cf019e9f"
+      },
+      {
+        "name": "vocab.txt",
+        "source": "vocab.txt",
+        "size": 93939,
+        "sha256": "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d"
+      }
+    ]
+  },
+  "gigaam": {
+    "repo": "istupakov/gigaam-v3-onnx",
+    "revision": "322c3b29492673eb7d0b434bfa9dfb8653e34d02",
+    "license": "mit",
+    "files": [
+      {
+        "name": "model.onnx",
+        "source": "v3_e2e_ctc.onnx",
+        "size": 885950079,
+        "sha256": "377701bd33568f4733feec2db5b2dc12544fd09a5a5dfa69ccf55d161f84027a"
+      },
+      {
+        "name": "vocab.txt",
+        "source": "v3_e2e_ctc_vocab.txt",
+        "size": 2007,
+        "sha256": "142de7570b3de5b3035ce111a89c228e80e6085273731d944093ddf24fa539cd"
+      }
+    ]
+  }
+}

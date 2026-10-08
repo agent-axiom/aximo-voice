@@ -1,0 +1,9 @@
+.research/
+node_modules/
+native/target/
+bin/
+.DS_Store
+*.wav
+*.pcm
+dist/
+SOURCE_MANIFEST.json
