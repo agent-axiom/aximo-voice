@@ -1,0 +1,16 @@
+{
+  "name": "aximo",
+  "owner": {
+    "name": "Axiom"
+  },
+  "plugins": [
+    {
+      "name": "aximo-voice",
+      "source": "./",
+      "description": "Local dictation for Claude Code"
+    }
+  ],
+  "metadata": {
+    "description": "Private local speech-to-text dictation for Claude Code."
+  }
+}

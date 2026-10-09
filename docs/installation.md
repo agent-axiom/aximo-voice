@@ -1,0 +1,90 @@
+# Installation and readiness
+
+## Current status
+
+This is a source preview. There is no runtime release in `scripts/runtime-manifest.txt`,
+so automatic runtime installation intentionally fails closed. Installing the plugin
+alone does not make dictation work. The build workflow produces reviewable platform
+artifacts without publishing releases, registries, or marketplace submissions.
+
+Tested Mods host: Claude Code 2.1.293. Mods are an early-access API; managed policy
+can disable them. The plugin checks no hidden flags and bypasses no policy.
+
+## End-user path after a verified release
+
+Inside an interactive Claude Code session:
+
+```text
+/plugin install aximo-voice --marketplace agent-axiom/aximo-voice
+```
+
+This adds the repository as a marketplace and opens the installation dialog.
+Restart Claude Code if prompted. Run `/av setup en` or
+`/av setup ru`. The dialog identifies the runtime/model sources and asks
+before downloading up to 1 GB of model weights. No microphone capture occurs at
+install, session start, or model setup. Your first explicit dictation requests OS
+microphone access. Rejecting it leaves an actionable error and starts no fallback.
+
+That combined `--marketplace` option is an **interactive slash command**, not a
+supported flag for the shell's `claude plugin install`. The shell equivalent is:
+
+```sh
+claude plugin marketplace add agent-axiom/aximo-voice
+claude plugin install aximo-voice@aximo
+```
+
+See [Anthropic's official install guide](https://code.claude.com/docs/en/plugins/install#add-a-marketplace-and-install-in-one-command).
+
+## Developer preview now
+
+1. Clone this repository and build the helper as described in [development](development.md),
+   or obtain the matching artifact from a successful native-build workflow.
+2. Extract the verified platform runtime archive into `bin/`, including its
+   helper, ONNX runtime libraries and notices. The helper must be named
+   `bin/aximo-voice-native` (`bin/aximo-voice-native.exe` on Windows). Do not copy
+   only the executable or rename another platform's binary.
+3. Start `claude --plugin-dir /absolute/path/to/aximo-voice`.
+4. Run `/av setup en` or `setup ru`. An existing developer helper is reused;
+   model download still needs consent.
+
+## Platform matrix
+
+Build targets: macOS Apple Silicon, macOS Intel, Linux x86-64, Windows x86-64.
+Apple Silicon requires macOS 14.0 or newer with the pinned official ONNX runtime.
+Intel builds target macOS 13.4 or newer, subject to their CI verification. Linux
+builds are checked on Ubuntu 24.04; other distributions need compatible system
+libraries. Each runtime is packaged with its required non-system libraries. Intel Mac builds
+compile the pinned official ONNX Runtime source in CI because that runtime version
+has no official Intel Mac archive. End users do not build it themselves.
+A build artifact is not evidence of working microphone access. The release checklist
+requires actual native microphone tests on every advertised platform. Linux needs a
+working audio stack and ALSA runtime; headless containers and remote SSH sessions
+usually have no local microphone. This version accepts start commands only from the local interactive Claude Code
+prompt. Remote-control, SDK and other-plugin command origins are refused. Windows TEMP must be on a local fixed ACL-capable volume, without reparse points
+or permissions allowing unrelated users to replace session directories. Custom
+shared-write or network TEMP locations are refused rather than weakening privacy.
+Linux ARM64 and Windows ARM64 are not
+included in this first build matrix.
+
+The first macOS release must address code signing/notarization and its real
+microphone permission flow. Do not bypass Gatekeeper or security warnings. Windows
+SmartScreen/signing and Linux distribution compatibility need release verification.
+
+## Commands
+
+Use `/av` as the short command. `/avoice` and the original `/aximo-voice`
+accept the same arguments and control the same dictation session. If another
+plugin already owns one of these names, Aximo Voice leaves it alone and reports
+the unavailable name; use another listed alias from `/help`.
+
+- `/av`: start, or stop the current recording
+- `/av start`: start only when idle
+- `/av stop`: stop recording and transcribe
+- `/av cancel`: stop/discard, including a pending uninserted transcript
+- `/av insert`: retry inserting a pending transcript
+- `/av status`: show current state
+- `/av setup en|ru`: choose/install a model, without recording
+
+Use Stop/Cancel buttons while recording so the command prompt itself need not be
+changed. Insertion uses the current cursor position and preserves existing text.
+A model load happens before recording; speak only after the status says Recording.

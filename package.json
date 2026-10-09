@@ -1,0 +1,1 @@
+{"name":"aximo-voice","version":"0.1.0-dev","private":true,"type":"module","description":"Local dictation into Claude Code's editable prompt","scripts":{"test":"node --test tests/*.test.mjs","check":"node --check hooks/register.js && node scripts/check-repository.mjs"},"engines":{"node":">=22"}}

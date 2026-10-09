@@ -1,0 +1,46 @@
+[package]
+name = "aximo-voice"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88"
+license = "MIT"
+description = "Private local microphone and Aximo inference helper for Claude Code"
+publish = false
+
+[[bin]]
+name = "aximo-voice-native"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0"
+aximo-audio = { git = "https://github.com/agent-axiom/aximo", rev = "eca35cc89ad00953b3e5052a885a596a7c2a05b3" }
+aximo-core = { git = "https://github.com/agent-axiom/aximo", rev = "eca35cc89ad00953b3e5052a885a596a7c2a05b3" }
+aximo-inference = { git = "https://github.com/agent-axiom/aximo", rev = "eca35cc89ad00953b3e5052a885a596a7c2a05b3" }
+cpal = "0.15.3"
+directories = "6"
+fs2 = "0.4"
+hound = "3.5"
+# Configure privacy before aximo-inference creates its first ONNX session.
+ort = "=2.0.0-rc.12"
+# Honor the operating system's trusted roots, including managed enterprise CAs.
+# TLS validation stays enabled; downloaded models also need pinned SHA-256.
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls-native-roots"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tempfile = "3"
+# Keep the tested Aximo model adapter and ONNX dependency surface stable.
+transcribe-rs = { version = "=0.3.11", features = ["onnx"] }
+uuid = { version = "1", features = ["v4"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+signal-hook = "0.3"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming"] }
+
+[profile.release]
+lto = "thin"
+strip = true
+

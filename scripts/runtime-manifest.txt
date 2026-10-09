@@ -1,0 +1,4 @@
+# platform sha256 https-url
+# No release is authorized or published yet. Intentionally fail closed.
+# Populate with immutable version-tagged GitHub release assets and SHA-256s
+# produced by the verified native-build workflow after maintainer approval.

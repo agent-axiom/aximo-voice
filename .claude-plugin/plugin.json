@@ -1,0 +1,1 @@
+{"name":"aximo-voice","version":"0.1.0","description":"Local speech-to-text dictation into the editable Claude Code prompt. No automatic send.","author":{"name":"Axiom"},"homepage":"https://github.com/agent-axiom/aximo-voice","repository":"https://github.com/agent-axiom/aximo-voice","license":"MIT","keywords":["voice","dictation","local","privacy"]}

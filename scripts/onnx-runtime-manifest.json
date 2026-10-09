@@ -1,0 +1,30 @@
+{
+  "version": "1.24.2",
+  "release": "https://github.com/microsoft/onnxruntime/releases/tag/v1.24.2",
+  "commit": "058787ceead760166e3c50a0a4cba8a833a6f53f",
+  "platforms": {
+    "linux-x86_64": {
+      "os": "linux", "arch": "x64", "mode": "archive",
+      "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.24.2/onnxruntime-linux-x64-1.24.2.tgz",
+      "sha256": "43725474ba5663642e17684717946693850e2005efbd724ac72da278fead25e6"
+    },
+    "macos-aarch64": {
+      "os": "darwin", "arch": "arm64", "mode": "archive",
+      "minimumMacOS": "14.0",
+      "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.24.2/onnxruntime-osx-arm64-1.24.2.tgz",
+      "sha256": "0af4fa503e8ea285245b47ee42d0a7461b8156a81270857da0c1d4ecf858abde"
+    },
+    "macos-x86_64": {
+      "os": "darwin", "arch": "x64", "mode": "source",
+      "repository": "https://github.com/microsoft/onnxruntime.git",
+      "commit": "058787ceead760166e3c50a0a4cba8a833a6f53f",
+      "minimumMacOS": "13.4",
+      "reason": "Microsoft publishes no Intel macOS archive for 1.24.2; build the same pinned release in CI."
+    },
+    "windows-x86_64": {
+      "os": "win32", "arch": "x64", "mode": "archive",
+      "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.24.2/onnxruntime-win-x64-1.24.2.zip",
+      "sha256": "8e3e9c826375352e29cb2614fe44f3d7a4b0ff7b8028ad7a456af9d949a7e8b0"
+    }
+  }
+}
