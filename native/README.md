@@ -9,7 +9,7 @@ The commands return one JSON object on standard output. Errors return
 
 | Command | Result |
 | --- | --- |
-| `doctor --engine parakeet` | `type: doctor`, `modelReady`, `engine`, platform information; never opens the microphone |
+| `doctor --engine parakeet` | `type: doctor`, `modelReady`, `engine`, platform information and a native ONNX ABI check with telemetry disabled; never opens the microphone |
 | `setup-model --engine parakeet` | Explicitly downloads the pinned, verified model, then returns `type: ready` |
 | `record --session UUID --engine parakeet` | Blocks until stop, cancel or the limit; returns `type: transcript` with `text`, or `type: cancelled` |
 | `transcribe-file --file input.wav --engine parakeet` | Transcribes an explicit local WAV without opening the microphone; uses the same verified model and returns `type: transcript` |

@@ -28,8 +28,10 @@ Only the selected engine name is saved in Claude's plugin store. No transcripts 
 written to that store, command output, logs, or model context by the plugin.
 
 Control/status/heartbeat files and inference WAV files use an exclusive per-session
-private directory. Unix directories are 0700 and control writes are atomic. The
-native helper removes them on normal completion and best-effort cancellation.
+private directory. Unix directories are 0700. On Windows, directories are created
+atomically with a protected DACL granting only the current user and SYSTEM, with
+owner/ACL checks and retained handles during use. Unsafe shared-write, remote,
+removable/non-ACL and reparse-point TEMP paths are refused. Control writes are atomic. The native helper removes them on normal completion and best-effort cancellation.
 A process crash, SIGKILL, Windows file lock, or power loss can leave private temporary
 files. This is **not a RAM-only guarantee**. Inspect/remove stale `aximo-voice-*`
 session directories only when no dictation process is running. See the native

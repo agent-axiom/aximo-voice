@@ -86,13 +86,7 @@ fn dispatch(emitted: &Arc<AtomicBool>) -> Result<Value> {
     let kind = EngineKind::from_str(engine)?;
     let model = model_path(engine)?;
     match command.as_str() {
-        "doctor" => Ok(json!({
-            "type": "doctor", "version": env!("CARGO_PKG_VERSION"),
-            "platform": std::env::consts::OS, "architecture": std::env::consts::ARCH,
-            "engine": engine, "modelReady": model_download::is_ready(engine, &model),
-            "modelPath": model, "captureLimitSeconds": audio::MAX_RECORD_SECONDS,
-            "microphoneChecked": false,
-        })),
+        "doctor" => doctor(engine, model),
         "setup-model" => {
             model_download::setup(engine, &model)?;
             Ok(json!({"type": "ready", "engine": engine, "modelPath": model}))
@@ -101,6 +95,20 @@ fn dispatch(emitted: &Arc<AtomicBool>) -> Result<Value> {
         "transcribe-file" => transcribe_file(required(&options, "--file")?, kind, model, emitted),
         _ => bail!("unknown command; use record, control, doctor, or setup-model"),
     }
+}
+
+fn doctor(engine: &str, model: PathBuf) -> Result<Value> {
+    initialize_private_inference()?;
+    // Exercise the bundled native ONNX ABI without a model or microphone.
+    let _options = ort::session::Session::builder()?;
+    Ok(json!({
+        "type": "doctor", "version": env!("CARGO_PKG_VERSION"),
+        "platform": std::env::consts::OS, "architecture": std::env::consts::ARCH,
+        "engine": engine, "modelReady": model_download::is_ready(engine, &model),
+        "modelPath": model, "captureLimitSeconds": audio::MAX_RECORD_SECONDS,
+        "microphoneChecked": false, "runtimeLoaded": true,
+        "telemetryEnabled": false,
+    }))
 }
 
 fn required<'a>(options: &'a BTreeMap<String, String>, key: &str) -> Result<&'a str> {
@@ -142,6 +150,7 @@ fn record(
         signal_hook::flag::register(signal_hook::consts::SIGHUP, cancelled_signal.clone())?;
     }
     let watchdog_path = session.path.clone();
+    let watchdog_cleanup = session.cleanup_handle();
     let watchdog_done = done.clone();
     let watchdog_emitted = emitted.clone();
     let watchdog_signal = cancelled_signal.clone();
@@ -158,16 +167,18 @@ fn record(
             let timed_out = started.elapsed() > MAX_WALL_TIME;
             if cancelled || timed_out {
                 // Native inference is synchronous and cannot be interrupted safely
-                // in-process. End this isolated helper, suppressing any transcript.
-                let _ = std::fs::remove_dir_all(&watchdog_path);
+                // in-process. Claim the terminal result before cleanup removes
+                // cancellation markers, then end the isolated helper.
                 if cancelled {
                     emit(&watchdog_emitted, json!({"type": "cancelled"}));
+                    watchdog_cleanup.cleanup();
                     std::process::exit(0);
                 } else {
                     emit(
                         &watchdog_emitted,
                         json!({"type": "error", "error": "local dictation exceeded its time limit"}),
                     );
+                    watchdog_cleanup.cleanup();
                     std::process::exit(1);
                 }
             }
@@ -302,7 +313,7 @@ fn transcribe_file(
     let done2 = done.clone();
     let cancelled2 = cancelled.clone();
     let output = emitted.clone();
-    let path = session.path.clone();
+    let cleanup = session.cleanup_handle();
     thread::spawn(move || {
         let start = Instant::now();
         loop {
@@ -311,11 +322,11 @@ fn transcribe_file(
                 break;
             }
             if cancelled2.load(Ordering::Relaxed) || start.elapsed() > MAX_WALL_TIME {
-                let _ = std::fs::remove_dir_all(path);
                 emit(
                     &output,
                     json!({"type": "error", "error": "file inference interrupted or timed out"}),
                 );
+                cleanup.cleanup();
                 std::process::exit(1);
             }
         }

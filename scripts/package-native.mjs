@@ -105,7 +105,7 @@ try {
   const executable = join(relocated,helper); await chmod(executable,0o755);
   version = JSON.parse(run(executable,['--version'],{env:cleanEnv,cwd:relocated}));
   const doctor = JSON.parse(run(executable,['doctor'],{env:cleanEnv,cwd:relocated}));
-  if (version.version !== '0.1.0' || doctor.type !== 'doctor' || doctor.microphoneChecked !== false) throw Error('Relocated doctor/version contract failed');
+  if (version.version !== '0.1.0' || doctor.type !== 'doctor' || doctor.microphoneChecked !== false || doctor.runtimeLoaded !== true || doctor.telemetryEnabled !== false) throw Error('Relocated doctor/version contract failed');
 } finally { await rm(relocated,{recursive:true,force:true}); }
 const files = [];
 for (const file of (await readdir(runtime)).sort()) files.push({file,sha256:await sha(join(runtime,file))});

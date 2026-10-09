@@ -60,7 +60,10 @@ A build artifact is not evidence of working microphone access. The release check
 requires actual native microphone tests on every advertised platform. Linux needs a
 working audio stack and ALSA runtime; headless containers and remote SSH sessions
 usually have no local microphone. This version accepts start commands only from the local interactive Claude Code
-prompt. Remote-control, SDK and other-plugin command origins are refused. Linux ARM64 and Windows ARM64 are not
+prompt. Remote-control, SDK and other-plugin command origins are refused. Windows TEMP must be on a local fixed ACL-capable volume, without reparse points
+or permissions allowing unrelated users to replace session directories. Custom
+shared-write or network TEMP locations are refused rather than weakening privacy.
+Linux ARM64 and Windows ARM64 are not
 included in this first build matrix.
 
 The first macOS release must address code signing/notarization and its real

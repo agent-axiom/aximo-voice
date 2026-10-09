@@ -22,8 +22,46 @@ pub fn session_path(session: &str) -> Result<PathBuf> {
     Ok(std::env::temp_dir().join(format!("aximo-voice-{session}")))
 }
 
+/// A watchdog may close the Windows guard just before terminating the helper.
+/// Cleanup is bounded and best-effort; forced process termination can still
+/// leave private files. It must only be called after claiming a terminal result.
+#[derive(Clone)]
+pub struct SessionCleanup {
+    path: PathBuf,
+    #[cfg(windows)]
+    guard: std::sync::Arc<std::sync::Mutex<Option<crate::windows_security::DirectoryGuard>>>,
+}
+
+impl SessionCleanup {
+    pub fn cleanup(&self) {
+        #[cfg(windows)]
+        {
+            // No live recording-path handle may block normal root removal.
+            // Even a poisoned lock must release the guard during cleanup.
+            let guard = self
+                .guard
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .take();
+            drop(guard);
+            // A concurrent, already-running control command may briefly retain
+            // its own guard. Do not make one sharing violation a permanent leak.
+            for _ in 0..6 {
+                match fs::remove_dir_all(&self.path) {
+                    Ok(()) => return,
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => return,
+                    Err(_) => std::thread::sleep(Duration::from_millis(25)),
+                }
+            }
+        }
+        #[cfg(not(windows))]
+        let _ = fs::remove_dir_all(&self.path);
+    }
+}
+
 pub struct SessionDir {
     pub path: PathBuf,
+    cleanup: SessionCleanup,
 }
 
 impl SessionDir {
@@ -32,6 +70,7 @@ impl SessionDir {
     }
 
     fn create_at(path: PathBuf) -> Result<Self> {
+        #[cfg(not(windows))]
         let builder = fs::DirBuilder::new();
         #[cfg(unix)]
         let builder = {
@@ -40,14 +79,28 @@ impl SessionDir {
             builder.mode(0o700);
             builder
         };
+        #[cfg(not(windows))]
         builder
             .create(&path)
             .context("cannot create exclusive session directory")?;
-        let session = Self { path };
+        #[cfg(windows)]
+        let guard = std::sync::Arc::new(std::sync::Mutex::new(Some(
+            crate::windows_security::create_private(&path)?,
+        )));
+        let cleanup = SessionCleanup {
+            path: path.clone(),
+            #[cfg(windows)]
+            guard,
+        };
+        let session = Self { path, cleanup };
         validate_dir(&session.path)?;
         session.set_state("loading")?;
         atomic_write(&session.path, "heartbeat", b"alive")?;
         Ok(session)
+    }
+
+    pub fn cleanup_handle(&self) -> SessionCleanup {
+        self.cleanup.clone()
     }
 
     pub fn set_state(&self, state: &str) -> Result<()> {
@@ -65,11 +118,13 @@ impl SessionDir {
 
 impl Drop for SessionDir {
     fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.path);
+        self.cleanup.cleanup();
     }
 }
 
 pub fn validate_dir(path: &Path) -> Result<()> {
+    #[cfg(windows)]
+    let _guard = crate::windows_security::open_private(path)?;
     let metadata = fs::symlink_metadata(path).context("session directory is unavailable")?;
     if !metadata.is_dir() || metadata.file_type().is_symlink() {
         bail!("unsafe session directory");
@@ -87,6 +142,8 @@ pub fn validate_dir(path: &Path) -> Result<()> {
 }
 
 pub fn atomic_write(dir: &Path, name: &str, data: &[u8]) -> Result<()> {
+    #[cfg(windows)]
+    let _guard = crate::windows_security::open_private(dir)?;
     validate_dir(dir)?;
     let mut file = tempfile::NamedTempFile::new_in(dir)?;
     file.write_all(data)?;
@@ -126,6 +183,8 @@ fn control_at(path: &Path, action: &str) -> Result<Value> {
         Err(error) => return Err(error.into()),
         Ok(_) => validate_dir(path)?,
     }
+    #[cfg(windows)]
+    let _guard = crate::windows_security::open_private(path)?;
     match action {
         "heartbeat" => atomic_write(path, "heartbeat", b"alive")?,
         "stop" => atomic_write(path, "stop", b"stop")?,
@@ -198,6 +257,37 @@ mod tests {
         let parent = tempfile::tempdir().unwrap();
         assert!(!lease_expired(parent.path(), Duration::from_secs(1)));
         assert!(lease_expired(parent.path(), Duration::from_secs(11)));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn explicit_cleanup_closes_shared_guard_and_is_idempotent() {
+        let parent = tempfile::tempdir().unwrap();
+        let path = parent.path().join("session");
+        let session = SessionDir::create_at(path.clone()).unwrap();
+        fs::write(path.join("synthetic.wav"), b"synthetic test data").unwrap();
+        let cleanup = session.cleanup_handle();
+        cleanup.cleanup();
+        assert!(!path.exists());
+        cleanup.cleanup();
+        drop(session);
+        assert!(!path.exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn cleanup_retries_until_concurrent_control_guard_closes() {
+        let parent = tempfile::tempdir().unwrap();
+        let path = parent.path().join("session");
+        let session = SessionDir::create_at(path.clone()).unwrap();
+        let control_guard = crate::windows_security::open_private(&path).unwrap();
+        let control = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(75));
+            drop(control_guard);
+        });
+        drop(session);
+        control.join().unwrap();
+        assert!(!path.exists());
     }
 
     #[cfg(unix)]

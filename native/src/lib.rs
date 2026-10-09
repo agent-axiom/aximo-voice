@@ -3,3 +3,6 @@
 pub mod audio;
 pub mod control;
 pub mod model_download;
+
+#[cfg(windows)]
+mod windows_security;
