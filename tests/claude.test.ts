@@ -1,19 +1,19 @@
 import { expect, mock, test } from 'claude-code/testing'
 
-async function stubs($, on, response = {type: 'transcript', text: 'hello from local voice'}, refusedCommands: string[] = []) {
+async function stubs($, on, response = {type: 'transcript', text: 'hello from local voice'}, refusedCommands: string[] = [], missingCommandHandler = false) {
   const clock = mock.clock(on)
   mock.store(on, {})
   mock.env(on, {})
-  const calls: string[][] = [], fills: {text: string, mode: string}[] = [], commands: {name: string, immediate?: boolean}[] = []
+  const calls: string[][] = [], fills: {text: string, mode: string}[] = [], commands: {name: string, immediate?: boolean}[] = [], toasts: string[] = []
   on('session.start', () => ({cwd: '/work'}))
-  on('command.run', () => ({text: 'other command'}))
+  if (!missingCommandHandler) on('command.run', () => ({text: 'other command'}))
   on('command.register', ($, e) => {
     commands.push(e)
     return refusedCommands.includes(e.name) ? {deny: 'Command name taken'} : {value: {command: e.name}}
   })
   let isFilled = true
   on('fs.exists', () => ({value: true}))
-  on('ui.toast', () => ({value: undefined}))
+  on('ui.toast', ($, e) => {toasts.push(e.text);return {value: undefined}})
   on('ui.status', () => ({value: undefined}))
   on('ui.render', () => ({type: 'Text', props: {}, children: ['Existing Claude UI']}))
   on('process.run', ($, e) => {
@@ -23,7 +23,7 @@ async function stubs($, on, response = {type: 'transcript', text: 'hello from lo
   })
   on('prompt.fill', ($, e) => {fills.push({text: e.text, mode: e.mode});return {isFilled}})
   await $.session.start({surface: 'terminal', isInteractive: true, cwd: '/work'})
-  return {clock, calls, fills, commands, setFilled(value: boolean) {isFilled = value}}
+  return {clock, calls, fills, commands, toasts, setFilled(value: boolean) {isFilled = value}}
 }
 
 test('real Mods host loads plugin and inserts an editable draft', async ($, on) => {
@@ -126,4 +126,16 @@ test('a refused short name passes through while another alias stays usable', asy
   await $.command.run({command: 'avoice', args: 'start', origin: {kind: 'composer'}})
   await h.clock.advance(1)
   expect(h.fills).toEqual([{text: 'hello from local voice', mode: 'insert'}])
+})
+
+
+test('a refused name preserves downstream errors without a voice failure toast', async ($, on) => {
+  const h = await stubs($, on, undefined, ['av'], true)
+  let failure = ''
+  try {
+    await $.command.run({command: 'av', args: 'start', origin: {kind: 'composer'}})
+  } catch (error) { failure = String(error) }
+  expect(failure).toMatch(/no implementation for command.run/)
+  expect(h.toasts).toEqual(['Aximo Voice could not register /av. Check /help for the available voice commands.'])
+  expect(h.calls).toEqual([])
 })

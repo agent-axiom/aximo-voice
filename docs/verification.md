@@ -14,7 +14,7 @@ The workflows cover:
 
 - 39 Node tests: command aliases/collisions, lifecycle, consent, prompt insertion,
   cancellation, runtime installer integrity/rollback, and native dependency metadata parsing
-- 13 tests in the real Claude Code 2.1.293 Mods test host, plus plugin/marketplace validation
+- 14 tests in the real Claude Code 2.1.293 Mods test host, plus plugin/marketplace validation
   (registration/native-process responses are mocked; all three command matchers and
   shared-state cancellation run through the real host)
 - 5 Windows PowerShell installer integrity/failure cases

@@ -248,7 +248,8 @@ async function runCommand($, state, commands, e, next) {
   return dispatch($, state, e.args || '');
 }
 
-function commandFailed($) {
+function commandFailed($, e, next) {
+  if (next.called) return next(e);
   $.ui.toast('Voice command could not finish. Use /av status.');
   return {};
 }
