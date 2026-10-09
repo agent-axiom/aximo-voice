@@ -32,8 +32,9 @@ use windows_sys::Win32::{
         GetVolumeInformationW, GetVolumePathNameW, BY_HANDLE_FILE_INFORMATION, DELETE,
         FILE_ALL_ACCESS, FILE_APPEND_DATA, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT,
         FILE_DELETE_CHILD, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
-        FILE_READ_ATTRIBUTES, FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_WRITE_ATTRIBUTES,
-        FILE_WRITE_DATA, FILE_WRITE_EA, OPEN_EXISTING, READ_CONTROL, WRITE_DAC, WRITE_OWNER,
+        FILE_LIST_DIRECTORY, FILE_READ_ATTRIBUTES, FILE_SHARE_READ, FILE_SHARE_WRITE,
+        FILE_WRITE_ATTRIBUTES, FILE_WRITE_DATA, FILE_WRITE_EA, OPEN_EXISTING, READ_CONTROL,
+        WRITE_DAC, WRITE_OWNER,
     },
     System::{
         SystemServices::{ACCESS_ALLOWED_ACE_TYPE, ACCESS_DENIED_ACE_TYPE, FILE_PERSISTENT_ACLS},
@@ -228,7 +229,9 @@ fn open_directory(path: &Path, inspect_acl: bool) -> Result<OwnedHandle> {
     unsafe {
         let raw = CreateFileW(
             path.as_ptr(),
-            FILE_READ_ATTRIBUTES | if inspect_acl { READ_CONTROL } else { 0 },
+            // Attribute-only handles do not enforce sharing restrictions. A
+            // directory-data read makes omitting FILE_SHARE_DELETE pin the name.
+            FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES | if inspect_acl { READ_CONTROL } else { 0 },
             FILE_SHARE_READ | FILE_SHARE_WRITE,
             null(),
             OPEN_EXISTING,
@@ -441,9 +444,12 @@ mod tests {
                 && u32::from(ace.flags) & INHERITED_ACE != 0));
         drop(handle);
         drop(wav);
-        assert!(fs::rename(&child, root.join("swapped")).is_err());
+        let swapped = root.join("swapped");
+        assert!(fs::rename(&child, &swapped).is_err());
+        assert!(child.exists());
         drop(guard);
-        fs::remove_dir_all(&child).unwrap();
+        fs::rename(&child, &swapped).unwrap();
+        fs::remove_dir_all(&swapped).unwrap();
         assert!(!child.exists());
     }
 
