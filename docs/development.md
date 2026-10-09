@@ -48,8 +48,9 @@ No workflow publishes a release, a package registry entry, or a marketplace list
 
 ## Test layers
 
-- Node lifecycle tests exercise asynchronous cancellation, retries, empty/invalid
-  results, blocked insertion, setup consent, and session teardown.
+- Node lifecycle tests exercise command aliases, registration conflicts, asynchronous
+  cancellation, retries, empty/invalid results, blocked insertion, setup consent,
+  and session teardown.
 - Claude's real Mods test host validates sandbox API calls, prompt insertion and
   terminal/desktop control trees. These are host tests, not a physical UI recording.
 - Native Rust tests cover audio normalization/bounds, model integrity checks,

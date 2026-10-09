@@ -12,9 +12,11 @@ both that source commit and GitHub's workflow commit in build metadata.
 
 The workflows cover:
 
-- 33 Node tests: lifecycle, consent, prompt insertion, cancellation, runtime installer
-  integrity/rollback, and native dependency metadata parsing
-- 6 tests in the real Claude Code 2.1.293 Mods host, plus plugin/marketplace validation
+- 39 Node tests: command aliases/collisions, lifecycle, consent, prompt insertion,
+  cancellation, runtime installer integrity/rollback, and native dependency metadata parsing
+- 13 tests in the real Claude Code 2.1.293 Mods test host, plus plugin/marketplace validation
+  (registration/native-process responses are mocked; all three command matchers and
+  shared-state cancellation run through the real host)
 - 5 Windows PowerShell installer integrity/failure cases
 - Rust tests, rustfmt, Clippy with warnings denied, and release builds on Linux x86-64,
   macOS Apple Silicon, macOS Intel, and Windows x86-64

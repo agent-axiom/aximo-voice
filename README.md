@@ -14,9 +14,9 @@ verified platform builds and microphone testing. See [installation](docs/install
 
 ## How it works
 
-1. Run `/aximo-voice setup en` (Parakeet) or `/aximo-voice setup ru` (GigaAM).
+1. Run `/av setup en` (Parakeet) or `/av setup ru` (GigaAM).
 2. Approve the runtime/model download once. Allow your OS microphone prompt when recording starts.
-3. Run `/aximo-voice`, speak, then choose **Stop** or run `/aximo-voice stop`.
+3. Run `/av`, speak, then choose **Stop** or run `/av stop`.
 4. The transcript appears at the cursor. Edit it, then press Enter when ready.
 
 **Cancel** discards dictation. If a dialog blocks insertion, the transcript stays
@@ -43,7 +43,8 @@ CI-built native helper. Claude Code 2.1.293 is the tested Mods host.
 - A crash or forced kill can leave private temporary files; see [privacy](docs/privacy.md)
 - Claude Code receives the inserted draft; it is sent to Claude when you submit it
 
-This adds `/aximo-voice`; it does not replace Claude Code's built-in `/voice`.
+Use `/av` for dictation. `/avoice` and the original `/aximo-voice` are equivalent
+aliases, including every subcommand. Claude Code's built-in `/voice` is unchanged.
 The first version loads its local model for each dictation; it is not streaming ASR.
 
 ## Details

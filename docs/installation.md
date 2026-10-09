@@ -19,8 +19,8 @@ Inside an interactive Claude Code session:
 ```
 
 This adds the repository as a marketplace and opens the installation dialog.
-Restart Claude Code if prompted. Run `/aximo-voice setup en` or
-`/aximo-voice setup ru`. The dialog identifies the runtime/model sources and asks
+Restart Claude Code if prompted. Run `/av setup en` or
+`/av setup ru`. The dialog identifies the runtime/model sources and asks
 before downloading up to 1 GB of model weights. No microphone capture occurs at
 install, session start, or model setup. Your first explicit dictation requests OS
 microphone access. Rejecting it leaves an actionable error and starts no fallback.
@@ -44,7 +44,7 @@ See [Anthropic's official install guide](https://code.claude.com/docs/en/plugins
    `bin/aximo-voice-native` (`bin/aximo-voice-native.exe` on Windows). Do not copy
    only the executable or rename another platform's binary.
 3. Start `claude --plugin-dir /absolute/path/to/aximo-voice`.
-4. Run `/aximo-voice setup en` or `setup ru`. An existing developer helper is reused;
+4. Run `/av setup en` or `setup ru`. An existing developer helper is reused;
    model download still needs consent.
 
 ## Platform matrix
@@ -72,13 +72,18 @@ SmartScreen/signing and Linux distribution compatibility need release verificati
 
 ## Commands
 
-- `/aximo-voice`: start, or stop the current recording
-- `/aximo-voice start`: start only when idle
-- `/aximo-voice stop`: stop recording and transcribe
-- `/aximo-voice cancel`: stop/discard, including a pending uninserted transcript
-- `/aximo-voice insert`: retry inserting a pending transcript
-- `/aximo-voice status`: show current state
-- `/aximo-voice setup en|ru`: choose/install a model, without recording
+Use `/av` as the short command. `/avoice` and the original `/aximo-voice`
+accept the same arguments and control the same dictation session. If another
+plugin already owns one of these names, Aximo Voice leaves it alone and reports
+the unavailable name; use another listed alias from `/help`.
+
+- `/av`: start, or stop the current recording
+- `/av start`: start only when idle
+- `/av stop`: stop recording and transcribe
+- `/av cancel`: stop/discard, including a pending uninserted transcript
+- `/av insert`: retry inserting a pending transcript
+- `/av status`: show current state
+- `/av setup en|ru`: choose/install a model, without recording
 
 Use Stop/Cancel buttons while recording so the command prompt itself need not be
 changed. Insertion uses the current cursor position and preserves existing text.

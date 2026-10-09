@@ -3,14 +3,14 @@ import assert from 'node:assert/strict';
 import { register, parseResult, statusText, newState } from '../hooks/register.js';
 
 function deferred() { let resolve, reject; const promise = new Promise((a,b) => {resolve=a;reject=b;}); return {promise,resolve,reject}; }
-function harness({ modelReady = true, fill = true, exists = true, ask = 'Cancel', helperResponse } = {}) {
+function harness({ modelReady = true, fill = true, exists = true, ask = 'Cancel', helperResponse, refusedCommands = [] } = {}) {
   const hooks = new Map(), tasks = [], intervals = [], calls = [], statuses = [], toasts = [], inserts = [];
   const running = deferred(); let nativeState = 'recording';
   const $ = {
     plugin: {root:'/plugin'},
     env:{get:async()=>undefined}, fs:{exists:async()=>exists},
     store:{get:async()=>undefined,set:async(...args)=>calls.push(['store',...args])},
-    command:{register:async x=>calls.push(['register',x])},
+    command:{register:async x=>{calls.push(['register',x]);if(refusedCommands.includes(x.name))throw new Error('Command name taken');}},
     clock:{after:(ms, fn)=>{const timer={fn,cancelled:false,cancel(){this.cancelled=true;}};tasks.push(timer);return timer;},every:(ms,fn)=>{const timer={fn,cancelled:false,cancel(){this.cancelled=true;}};intervals.push(timer);return timer;}},
     process:{run:async(argv, options)=>{
       calls.push([argv, options]);
@@ -22,10 +22,11 @@ function harness({ modelReady = true, fill = true, exists = true, ask = 'Cancel'
     prompt:{fill:async input=>{inserts.push(input);if(fill instanceof Error)throw fill;return{isFilled:fill};}},
     ui:{status:x=>statuses.push(x),invalidate:()=>{},toast:x=>toasts.push(x),ask:async()=>ask,resolve:()=>({Box:'Box',Text:'Text',Button:'Button'})}
   };
-  register((event,matcher,fn)=>{if(typeof matcher==='function')fn=matcher;hooks.set(event,fn);return {catch(){}};});
+  register((event,matcher,fn)=>{if(typeof matcher==='function')fn=matcher;hooks.set(event==='command.run'?`command:${matcher.command}`:event,fn);return {catch(){}};});
+  let started;const begin=()=>started ||= hooks.get('session.start')($,{},async e=>e);
   return {$, calls,statuses,toasts,inserts,tasks,intervals,running,
-    begin:()=>hooks.get('session.start')($,{},async e=>e),
-    command:(args,origin={kind:'composer'})=>hooks.get('command.run')($,{args,origin}),
+    begin,
+    command:async(args,origin={kind:'composer'},command='av')=>{await begin();return hooks.get(`command:${command}`)($,{command,args,origin},async()=>({text:'other command'}));},
     end:(reason='other')=>hooks.get('session.end')($,{reason},async e=>e),
     tick:()=>intervals.at(-1).fn(), run:()=>tasks.at(-1).cancelled?Promise.resolve():tasks.at(-1).fn(),
     setNativeState:x=>{nativeState=x;},setFill:x=>{fill=x;}
@@ -34,8 +35,20 @@ function harness({ modelReady = true, fill = true, exists = true, ask = 'Cancel'
 const transcript=text=>({exitCode:0,stdout:JSON.stringify({type:'transcript',text})});
 const count=(h,action)=>h.calls.filter(x=>Array.isArray(x[0])&&x[0][1]===action).length;
 
-test('registers an immediate namespaced command without touching microphone',async()=>{
- const h=harness();await h.begin();assert.equal(h.calls[0][1].name,'aximo-voice');assert.equal(h.calls[0][1].immediate,true);assert.equal(count(h,'record'),0);
+test('registers all three immediate names without touching microphone',async()=>{
+ const h=harness();await h.begin();const specs=h.calls.filter(c=>c[0]==='register').map(c=>c[1]);assert.deepEqual(specs.map(s=>s.name),['av','avoice','aximo-voice']);assert(specs.every(s=>s.immediate===true));assert(specs.every(s=>s.argumentHint===specs[0].argumentHint));assert.equal(count(h,'record'),0);
+});
+for(const name of ['av','avoice','aximo-voice'])test(`${name} starts dictation with no argument and returns no model text`,async()=>{
+ const h=harness();assert.deepEqual(await h.command('',{kind:'composer'},name),{});const done=h.run();h.running.resolve(transcript('draft'));await done;assert.deepEqual(h.inserts,[{text:'draft',mode:'insert'}]);assert.equal(count(h,'record'),1);
+});
+test('all names control one recording and preserve legacy stop/cancel',async()=>{
+ const h=harness();await h.command('start');const done=h.run();await h.command('start',{kind:'composer'},'avoice');await h.command('stop',{kind:'composer'},'aximo-voice');assert.equal(count(h,'record'),1);assert.equal(h.tasks.length,1);await h.command('cancel',{kind:'composer'},'avoice');h.running.resolve(transcript('discard'));await done;assert.deepEqual(h.inserts,[]);
+});
+test('a refused short name passes through and other aliases still work',async()=>{
+ const h=harness({refusedCommands:['av']});assert.deepEqual(await h.command('start'),{text:'other command'});assert.equal(count(h,'doctor'),0);assert.match(h.toasts[0],/could not register \/av/);await h.command('start',{kind:'composer'},'avoice');await h.command('cancel',{kind:'composer'},'aximo-voice');await h.run();assert.equal(count(h,'record'),0);
+});
+test('help and setup guidance consistently use the short command',async()=>{
+ const h=harness();await h.command('unknown');assert.match(h.statuses.at(-1),/Use \/av \[/);await h.command('setup zz');assert.match(h.statuses.at(-1),/\/av setup en/);assert.match(statusText(newState()),/\/av to dictate/);
 });
 test('start records in background and inserts editable text without returning it to model',async()=>{
  const h=harness();await h.begin();assert.deepEqual(await h.command('start'),{});const done=h.run();await h.tick();assert.match(h.statuses.at(-1),/Recording/);h.running.resolve(transcript('  hello world  '));await done;
@@ -94,7 +107,7 @@ test('status text never includes the transcript',()=>{
 });
 
 test('automated, remote and unclassified command origins cannot capture audio',async()=>{
- const h=harness();for(const origin of [{kind:'plugin',name:'other'},{kind:'bridge'},{kind:'sdk'},null]) await h.command('start',origin);
+ const h=harness();for(const command of ['av','avoice','aximo-voice'])for(const origin of [{kind:'plugin',name:'other'},{kind:'bridge'},{kind:'sdk'},null])for(const args of ['start','setup ru','insert'])await h.command(args,origin,command);
  assert.equal(h.tasks.length,0);assert.equal(count(h,'doctor'),0);assert.equal(count(h,'record'),0);
 });
 

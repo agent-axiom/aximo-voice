@@ -32,7 +32,12 @@ Current official reference lists `process.spawn`, but the public declaration cop
 available during implementation predates it. We avoid inventing its stream/control
 contract. `process.run`, timers, commands, UI buttons and prompt insertion are tested
 against the real Claude Code 2.1.293 Mods host. Native built-in `/voice` registration
-cannot be replaced by a plugin command; this plugin registers `/aximo-voice`.
+cannot be replaced by a plugin command. This plugin registers `/av`, `/avoice`,
+and the original `/aximo-voice` separately because the tested `CommandSpec` has
+no alias field. All three share one state machine, origin check, and dispatcher;
+starting with one and stopping or cancelling with another controls the same
+recording. A refused registration is never intercepted, and does not prevent
+the remaining names from registering.
 
 ## Primary references
 
@@ -41,5 +46,5 @@ cannot be replaced by a plugin command; this plugin registers `/aximo-voice`.
 - [Types for your installed version](https://code.claude.com/docs/en/plugins/mods/create#get-type-definitions-for-your-version)
 - [Real-host testing](https://code.claude.com/docs/en/plugins/mods/test)
 
-Verified 2026-10-08. Tests and documentation name their actual host version rather
+Command registration reverified 2026-10-09. Tests and documentation name their actual host version rather
 than assuming early-access APIs stay compatible across releases.

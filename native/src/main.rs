@@ -235,7 +235,7 @@ fn record(
 fn require_model(kind: EngineKind, path: &std::path::Path) -> Result<()> {
     if !model_download::is_ready(kind.as_str(), path) {
         bail!(
-            "{} model is not installed or incomplete; run /aximo-voice setup {} first",
+            "{} model is not installed or incomplete; run /av setup {} first",
             kind.as_str(),
             if kind == EngineKind::Gigaam {
                 "ru"
