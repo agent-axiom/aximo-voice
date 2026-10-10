@@ -41,6 +41,13 @@ export async function regularFiles(root, relative = '') {
   return result;
 }
 
+// Cargo hard-links release binaries to target/release/deps. Accept that build
+// input only; copyFile below gives the shipped kit its own single-link inode.
+async function verifyCliInput(cli) {
+  const stat = await lstat(cli);
+  if (stat.isSymbolicLink() || !stat.isFile()) throw Error(`Management CLI must be a regular file, never a link: ${cli}`);
+}
+
 async function copyInput(source, target, input) {
   for (const file of await regularFiles(source, input)) {
     const from = join(source, file), to = join(target, file);
@@ -154,7 +161,7 @@ export async function createKit({ source, runtime, cli, output, platform, cliVer
     const pluginRoot = join(staging, PLUGIN_PATH);
     for (const input of PLUGIN_INPUTS) await copyInput(source, pluginRoot, input);
     for (const input of await regularFiles(runtime)) await copyInput(runtime, join(pluginRoot, 'bin'), input);
-    await regularFiles(dirname(cli), basename(cli));
+    await verifyCliInput(cli);
     await mkdir(join(staging, 'bin'), { recursive: true });
     await copyFile(cli, join(staging, 'bin/aximo-voice'));
     await chmod(join(staging, 'bin/aximo-voice'), 0o755);
@@ -183,7 +190,7 @@ async function main() {
   if (!PLATFORMS[platform] || PLATFORMS[platform][0] !== process.platform || PLATFORMS[platform][1] !== process.arch) throw Error('Kit platform must match the current Unix runner');
   const source = resolve('.'), runtime = resolve('dist/runtime'), cli = resolve('native/target/release/aximo-voice'), output = resolve('dist/kit');
   const env = cleanLoaderEnvironment();
-  await regularFiles(dirname(cli), basename(cli));
+  await verifyCliInput(cli);
   await regularFiles(runtime);
   const cliVersion = JSON.parse(run(cli, ['--version'], { env })).version;
   const runtimeVersion = JSON.parse(run(join(runtime, 'aximo-voice-native'), ['--version'], { env })).version;

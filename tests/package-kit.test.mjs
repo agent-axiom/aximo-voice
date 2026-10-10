@@ -45,6 +45,18 @@ test('full kit includes matching plugin, management CLI, complete runtime and ex
   assert.deepEqual(await verifyKit(input.output), metadata);
 });
 
+test('Cargo hard-linked CLI is copied into a standalone verified kit file', async t => {
+  const input = await fixture(t);
+  await link(input.cli, join(input.root, 'cargo-deps-binary'));
+  assert.equal((await lstat(input.cli)).nlink, 2);
+  await createKit(input);
+  const shipped = join(input.output, 'bin/aximo-voice');
+  assert.equal((await lstat(shipped)).nlink, 1);
+  await writeFile(input.cli, 'rebuilt Cargo output');
+  assert.equal(await readFile(shipped, 'utf8'), 'management CLI fixture');
+  await verifyKit(input.output);
+});
+
 for (const [name, mutate, error] of [
   ['CLI version mismatch', async f => { f.cliVersion = '0.2.0'; }, /versions must agree/],
   ['runtime version mismatch', async f => { f.runtimeVersion = '0.2.0'; }, /versions must agree/],
