@@ -1,4 +1,4 @@
-use aximo_voice::{audio, control, model_download};
+use aximo_voice::{audio, control, lifecycle_lock, model_download};
 
 use std::{
     collections::BTreeMap,
@@ -58,20 +58,9 @@ fn dispatch(emitted: &Arc<AtomicBool>) -> Result<Value> {
     if command == "--version" {
         return Ok(json!({"version": env!("CARGO_PKG_VERSION")}));
     }
-    let mut options = BTreeMap::new();
-    while let Some(key) = args.next() {
-        if !matches!(
-            key.as_str(),
-            "--session" | "--engine" | "--action" | "--file"
-        ) {
-            bail!("unknown option {key}");
-        }
-        let value = args
-            .next()
-            .with_context(|| format!("missing value for {key}"))?;
-        if options.insert(key.clone(), value).is_some() {
-            bail!("duplicate option {key}");
-        }
+    let (options, progress_json) = parse_options(args)?;
+    if progress_json && command != "setup-model" {
+        bail!("--progress-json is only supported for setup-model");
     }
     if command == "control" {
         return control::control(
@@ -88,13 +77,115 @@ fn dispatch(emitted: &Arc<AtomicBool>) -> Result<Value> {
     match command.as_str() {
         "doctor" => doctor(engine, model),
         "setup-model" => {
-            model_download::setup(engine, &model)?;
-            Ok(json!({"type": "ready", "engine": engine, "modelPath": model}))
+            let result = setup_model(
+                engine,
+                &model,
+                options.get("--session").map(String::as_str),
+                progress_json,
+            );
+            if progress_json {
+                if let Err(error) = &result {
+                    emit(
+                        emitted,
+                        json!({
+                            "type": "error", "error": bounded(&format!("{error:#}"), 1000),
+                            "protocol": model_download::PROGRESS_PROTOCOL,
+                            "operation": "setup-model", "engine": engine,
+                        }),
+                    );
+                }
+            }
+            result
         }
         "record" => record(required(&options, "--session")?, kind, model, emitted),
         "transcribe-file" => transcribe_file(required(&options, "--file")?, kind, model, emitted),
         _ => bail!("unknown command; use record, control, doctor, or setup-model"),
     }
+}
+
+fn parse_options(mut args: impl Iterator<Item = String>) -> Result<(BTreeMap<String, String>, bool)> {
+    let mut options = BTreeMap::new();
+    let mut progress_json = false;
+    while let Some(key) = args.next() {
+        if key == "--progress-json" {
+            if progress_json {
+                bail!("duplicate option --progress-json");
+            }
+            progress_json = true;
+            continue;
+        }
+        if !matches!(
+            key.as_str(),
+            "--session" | "--engine" | "--action" | "--file"
+        ) {
+            bail!("unknown option {key}");
+        }
+        let value = args
+            .next()
+            .with_context(|| format!("missing value for {key}"))?;
+        if options.insert(key.clone(), value).is_some() {
+            bail!("duplicate option {key}");
+        }
+    }
+    Ok((options, progress_json))
+}
+
+fn setup_model(
+    engine: &str,
+    model: &std::path::Path,
+    session_id: Option<&str>,
+    progress_json: bool,
+) -> Result<Value> {
+    // This path never initializes ONNX, audio, or microphone permissions.
+    // Model replacement cannot race capture/inference or package management.
+    let _lifecycle = lifecycle_lock::exclusive()?;
+    let session = session_id.map(control::SessionDir::create).transpose()?;
+    let signal = Arc::new(AtomicBool::new(false));
+    #[cfg(unix)]
+    {
+        signal_hook::flag::register(signal_hook::consts::SIGTERM, signal.clone())?;
+        signal_hook::flag::register(signal_hook::consts::SIGINT, signal.clone())?;
+        signal_hook::flag::register(signal_hook::consts::SIGHUP, signal.clone())?;
+    }
+    let started = Instant::now();
+    let cancelled = || setup_cancelled(session.as_ref(), &signal, started.elapsed());
+    let outcome = model_download::setup_with_progress(engine, model, &cancelled, &mut |event| {
+        if progress_json {
+            let mut out = io::stdout().lock();
+            serde_json::to_writer(&mut out, &event)?;
+            out.write_all(b"\n")?;
+            out.flush()?;
+        }
+        Ok(())
+    });
+    // Setup terminals share the same bounded JSONL protocol. Other commands,
+    // including transcripts, retain their original one-object output format.
+    let mut value = match outcome {
+        Ok(model_download::SetupOutcome::Ready) => {
+            json!({"type": "ready", "engine": engine, "modelPath": model})
+        }
+        Ok(model_download::SetupOutcome::Cancelled) => json!({"type": "cancelled"}),
+        Err(error) => return Err(error),
+    };
+    if progress_json {
+        value["protocol"] = json!(model_download::PROGRESS_PROTOCOL);
+        value["operation"] = json!("setup-model");
+        value["engine"] = json!(engine);
+    }
+    Ok(value)
+}
+
+fn setup_cancelled(
+    session: Option<&control::SessionDir>,
+    signal: &AtomicBool,
+    elapsed: Duration,
+) -> bool {
+    signal.load(Ordering::Relaxed)
+        || session.is_some_and(|session| {
+            session.cancelled()
+                || session.stopped()
+                || control::lease_expired(&session.path, elapsed)
+        })
 }
 
 fn doctor(engine: &str, model: PathBuf) -> Result<Value> {
@@ -103,6 +194,8 @@ fn doctor(engine: &str, model: PathBuf) -> Result<Value> {
     let _options = ort::session::Session::builder()?;
     Ok(json!({
         "type": "doctor", "version": env!("CARGO_PKG_VERSION"),
+        "runtimeVersion": env!("CARGO_PKG_VERSION"),
+        "setupProgressProtocol": model_download::PROGRESS_PROTOCOL,
         "platform": std::env::consts::OS, "architecture": std::env::consts::ARCH,
         "engine": engine, "modelReady": model_download::is_ready(engine, &model),
         "modelPath": model, "captureLimitSeconds": audio::MAX_RECORD_SECONDS,
@@ -134,6 +227,7 @@ fn record(
     model_path: PathBuf,
     emitted: &Arc<AtomicBool>,
 ) -> Result<Value> {
+    let _lifecycle = lifecycle_lock::shared()?;
     let session = control::SessionDir::create(session_id)?;
     // These are changed before CPAL, ONNX, or watchdog threads are started.
     // Aximo's adapter uses tempfile::NamedTempFile; contain it in this 0700 dir.
@@ -278,6 +372,7 @@ fn transcribe_file(
     model_path: PathBuf,
     emitted: &Arc<AtomicBool>,
 ) -> Result<Value> {
+    let _lifecycle = lifecycle_lock::shared()?;
     const MAX_FILE_BYTES: u64 = 64 * 1024 * 1024;
     let input = std::fs::File::open(file).context("cannot read the requested WAV file")?;
     let metadata = input.metadata()?;
@@ -355,6 +450,49 @@ fn transcribe_file(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn setup_progress_flag_has_no_value_and_rejects_duplicates() {
+        let (options, progress) = parse_options(
+            ["--engine", "gigaam", "--progress-json", "--session", "session"]
+                .into_iter()
+                .map(str::to_owned),
+        )
+        .unwrap();
+        assert!(progress);
+        assert_eq!(options["--engine"], "gigaam");
+        assert_eq!(options["--session"], "session");
+        assert!(parse_options(
+            ["--progress-json", "--progress-json"]
+                .into_iter()
+                .map(str::to_owned)
+        )
+        .is_err());
+        assert!(parse_options(["--engine"].into_iter().map(str::to_owned)).is_err());
+    }
+
+    #[test]
+    fn model_setup_uses_control_cancel_and_session_lease() {
+        let session = control::SessionDir::create(&uuid::Uuid::new_v4().to_string()).unwrap();
+        let signal = AtomicBool::new(false);
+        assert!(!setup_cancelled(Some(&session), &signal, Duration::ZERO));
+        std::fs::remove_file(session.path.join("heartbeat")).unwrap();
+        assert!(!setup_cancelled(
+            Some(&session),
+            &signal,
+            Duration::from_secs(1)
+        ));
+        assert!(setup_cancelled(
+            Some(&session),
+            &signal,
+            Duration::from_secs(11)
+        ));
+        control::atomic_write(&session.path, "cancel", b"cancel").unwrap();
+        assert!(setup_cancelled(Some(&session), &signal, Duration::ZERO));
+        assert!(!setup_cancelled(None, &signal, Duration::from_secs(999)));
+        signal.store(true, Ordering::Relaxed);
+        assert!(setup_cancelled(None, &signal, Duration::ZERO));
+    }
 
     #[test]
     fn refuses_inference_when_runtime_configuration_is_already_committed() {

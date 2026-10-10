@@ -3,6 +3,7 @@
 pub mod audio;
 pub mod control;
 pub mod model_download;
+pub mod lifecycle_lock;
 
 #[cfg(windows)]
 mod windows_security;

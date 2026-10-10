@@ -4,7 +4,8 @@ This executable opens the local default microphone and calls the embedded
 `aximo-inference` library. It does not connect to an Aximo server. The Aximo
 crates are pinned to `eca35cc89ad00953b3e5052a885a596a7c2a05b3`.
 
-The commands return one JSON object on standard output. Errors return
+The commands return one JSON object on standard output, except the opt-in
+`setup-model --progress-json` stream described below. Errors return
 `{"type":"error","error":"..."}` and a nonzero exit code.
 
 | Command | Result |
@@ -63,3 +64,47 @@ Automated tests do not open a microphone or download models. Real microphone,
 model inference, and Claude Code integration require a separate host smoke test.
 The `--lib` command runs core audio, IPC, and model-verification tests separately;
 keep the full test command in CI to also check the executable and ONNX linkage.
+
+## Model setup stream and safe retry
+
+`setup-model --engine parakeet --progress-json --session UUID` writes bounded
+JSONL to stdout. `doctor` advertises `setupProgressProtocol: 1` and
+`runtimeVersion`. Version 1 progress objects have `type: progress`,
+`operation: setup-model`, `protocol: 1`, `engine`, `stage`, `bytesCompleted`,
+`totalBytes`, and `reusedBytes`. Per-file events also include the pinned basename
+`file`, `fileBytes`, and `fileTotalBytes`. Stages are `checking`, `downloading`,
+`verifying` (SHA-256), and `installing`. `bytesCompleted` counts complete reused
+files and downloaded bytes; `fileBytes` during verification is hashing progress.
+Updates are throttled to four per second, except file/stage boundaries, with at
+most 4096 progress events. Terminal `ready`, `cancelled`, or `error` is always a
+separate final object; streamed terminals include the protocol, operation, and
+engine. Errors still exit nonzero. Without the flag there is only the terminal
+object. The transcript protocol is unchanged.
+
+Setup never opens the microphone or initializes inference. With a session,
+send the existing `control ... --action heartbeat` at least once per second;
+Cancel, Stop, or a lost session lease cooperatively cancels setup. Without a
+session, no heartbeat is needed. On Unix, SIGINT, SIGTERM, and SIGHUP also cancel.
+Cancellation is polled during hashing and while waiting for the network. The
+network worker has a bounded channel and never writes model files. Cancellation
+waits for any already-started final rename transaction to complete or roll back.
+
+Retry keeps and rehashes only whole verified files in a private revision-specific
+cache beside the installed model. Incomplete files are deleted, including stale
+partial files found after an interrupted process. No byte-range resume is
+claimed or attempted. Free-space checks report required and available bytes
+before downloading; allowance is the missing file bytes plus a 16 MiB margin.
+The installed model stays in place until every new file is verified. A failed
+commit restores the old directory; setup also recovers an interrupted directory
+swap on the next invocation. Model setup and package management take an exclusive
+lifecycle lock; inference holds a shared lock. Model files and helper binaries
+cannot be replaced while inference is running.
+
+## Packaged management CLI
+
+`aximo-voice` is built alongside `aximo-voice-native`. It verifies complete kit
+hashes and component versions, registers only its own local marketplace with
+the official Claude CLI, and holds an exclusive lifecycle lock while changing
+the installed kit. Capture and transcription hold shared locks; model setup
+takes an exclusive lock.
+Models live outside the versioned package. See [Homebrew](../docs/homebrew.md).

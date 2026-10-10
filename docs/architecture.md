@@ -26,12 +26,15 @@ The first version loads the speech model per dictation. This trades some startup
 latency for isolated, bounded helper lifetimes and a documented stable Mods API.
 Native incremental transcription and a persistent warm process are future work.
 
-## Why no process.spawn or built-in voice replacement?
+## Setup streaming and command aliases
 
-Current official reference lists `process.spawn`, but the public declaration copy
-available during implementation predates it. We avoid inventing its stream/control
-contract. `process.run`, timers, commands, UI buttons and prompt insertion are tested
-against the real Claude Code 2.1.293 Mods host. Native built-in `/voice` registration
+Model setup uses `process.spawn({argv})` verified against the actual Claude Code
+2.1.293 host: async chunks contain `{stream,text}`, and the terminal iterator
+value contains `{code,signal}`. It reads bounded protocol-1 JSONL progress and
+uses the same private heartbeat/cancel lease. Returning the iterator tears down
+the stream; a late terminal event cannot start recording or change the selected
+model. `process.run` remains the single-result recording path. Timers, commands,
+UI buttons and prompt insertion are tested against that host. Native built-in `/voice` registration
 cannot be replaced by a plugin command. This plugin registers `/av`, `/avoice`,
 and the original `/aximo-voice` separately because the tested `CommandSpec` has
 no alias field. All three share one state machine, origin check, and dispatcher;
@@ -48,3 +51,15 @@ the remaining names from registering.
 
 Command registration reverified 2026-10-09. Tests and documentation name their actual host version rather
 than assuming early-access APIs stay compatible across releases.
+
+## Managed package updates
+
+The complete kit is copied and verified in a private per-user data directory.
+Claude receives a local marketplace through its public CLI. Current Claude loads
+local marketplace files in place, so an active runtime must not live directly
+under a Brew Cellar/opt path that `brew upgrade` or cleanup can replace.
+Package management and model setup use an exclusive lifecycle lock; capture
+and inference hold shared locks. Setup stages and checks a new kit before replacement, restores the previous
+kit on registration failure, and never writes Claude settings JSON itself.
+Downloaded models stay outside either kit. Foreign marketplace registrations or
+non-user scopes require explicit manual channel selection instead of silent migration.
