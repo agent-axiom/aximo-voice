@@ -103,7 +103,9 @@ fn dispatch(emitted: &Arc<AtomicBool>) -> Result<Value> {
     }
 }
 
-fn parse_options(mut args: impl Iterator<Item = String>) -> Result<(BTreeMap<String, String>, bool)> {
+fn parse_options(
+    mut args: impl Iterator<Item = String>,
+) -> Result<(BTreeMap<String, String>, bool)> {
     let mut options = BTreeMap::new();
     let mut progress_json = false;
     while let Some(key) = args.next() {
@@ -454,9 +456,15 @@ mod tests {
     #[test]
     fn setup_progress_flag_has_no_value_and_rejects_duplicates() {
         let (options, progress) = parse_options(
-            ["--engine", "gigaam", "--progress-json", "--session", "session"]
-                .into_iter()
-                .map(str::to_owned),
+            [
+                "--engine",
+                "gigaam",
+                "--progress-json",
+                "--session",
+                "session",
+            ]
+            .into_iter()
+            .map(str::to_owned),
         )
         .unwrap();
         assert!(progress);

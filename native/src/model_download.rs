@@ -305,7 +305,10 @@ fn network_download(model: &Model, item: &ModelFile) -> Result<Download> {
                     .send()
                     .context("model download failed; check network and retry setup")?
                     .error_for_status()?;
-                if response.content_length().is_some_and(|n| n != expected_size) {
+                if response
+                    .content_length()
+                    .is_some_and(|n| n != expected_size)
+                {
                     bail!("model download size differs from the pinned manifest");
                 }
                 let mut bytes = [0u8; CHUNK_BYTES];
@@ -676,7 +679,10 @@ mod tests {
         )
         .unwrap_err();
         assert!(error.to_string().contains("network outage"));
-        assert_eq!(fs::read(target.join("old.onnx")).unwrap(), b"old verified model");
+        assert_eq!(
+            fs::read(target.join("old.onnx")).unwrap(),
+            b"old verified model"
+        );
         let fetched = RefCell::new(Vec::new());
         let events = RefCell::new(Vec::new());
         run_fixture(
@@ -699,7 +705,10 @@ mod tests {
             .files
             .iter()
             .all(|file| verify_file(&target.join(&file.name), file)));
-        assert!(events.borrow().iter().any(|event| event["reusedBytes"] == 3));
+        assert!(events
+            .borrow()
+            .iter()
+            .any(|event| event["reusedBytes"] == 3));
         let bytes: Vec<_> = events
             .borrow()
             .iter()
@@ -903,7 +912,9 @@ mod tests {
             u64::MAX,
         )
         .unwrap_err();
-        assert!(error.to_string().contains("could not install verified model"));
+        assert!(error
+            .to_string()
+            .contains("could not install verified model"));
         assert_eq!(fs::read(target.join("old")).unwrap(), b"working");
         assert!(!d.path().join(".model-backup-fixture").exists());
     }
