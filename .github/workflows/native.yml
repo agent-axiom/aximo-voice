@@ -52,14 +52,28 @@ jobs:
           toolchain: '1.94.1'
           components: rustfmt, clippy
           cache-workspaces: 'native -> target'
+      - run: cargo fmt --manifest-path native/Cargo.toml --check
       - name: Provision verified CPU ONNX Runtime
         run: node scripts/provision-onnx.mjs '${{ matrix.platform }}'
-      - run: cargo fmt --manifest-path native/Cargo.toml --check
       - run: cargo test --manifest-path native/Cargo.toml --locked
       - run: cargo clippy --manifest-path native/Cargo.toml --locked --all-targets -- -D warnings
       - run: cargo build --manifest-path native/Cargo.toml --release --locked
       - name: Package and relocate helper
         run: node scripts/package-native.mjs '${{ matrix.platform }}'
+      - name: Test management with isolated fake Claude
+        if: runner.os != 'Windows'
+        run: AXIMO_REQUIRE_MANAGER_TESTS=1 node --test tests/manager.test.mjs
+      - name: Package complete plugin and runtime preview kit
+        if: runner.os != 'Windows'
+        run: |
+          node scripts/package-kit.mjs '${{ matrix.platform }}'
+          env -u ORT_LIB_LOCATION -u LD_LIBRARY_PATH -u DYLD_LIBRARY_PATH dist/kit/bin/aximo-voice doctor --package-only
+      - name: Install exact tested Claude CLI for local marketplace smoke
+        if: runner.os != 'Windows'
+        run: npm install --prefix "$RUNNER_TEMP/claude-kit-tools" --no-save @anthropic-ai/claude-code@2.1.293
+      - name: Verify real local marketplace in an isolated profile
+        if: runner.os != 'Windows'
+        run: node scripts/smoke-kit-marketplace.mjs dist/kit/bin/aximo-voice "$RUNNER_TEMP/claude-kit-tools/node_modules/.bin/claude"
       - name: Native real-model wiring smoke
         if: runner.os == 'Linux'
         run: |

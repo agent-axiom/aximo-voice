@@ -29,7 +29,9 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
 archive="$tmp/runtime.tar.gz"
+printf '%s\n' 'Downloading the pinned native runtime over HTTPS…' >&2
 curl --fail --location --proto '=https' --proto-redir '=https' --connect-timeout 15 --max-time 480 "$url" -o "$archive"
+printf '%s\n' 'Verifying runtime SHA-256…' >&2
 if command -v sha256sum >/dev/null 2>&1; then actual=$(sha256sum "$archive" | cut -d ' ' -f 1)
 elif command -v shasum >/dev/null 2>&1; then actual=$(shasum -a 256 "$archive" | cut -d ' ' -f 1)
 else echo 'No system SHA-256 verifier found; runtime was not installed.' >&2; exit 1; fi
@@ -44,6 +46,7 @@ done < "$tmp/names"
 [ -z "$(sort "$tmp/names" | uniq -d)" ] || { echo 'Duplicate runtime archive entry.' >&2; exit 1; }
 tar -tvzf "$archive" > "$tmp/types"
 if grep -v '^-' "$tmp/types" >/dev/null; then echo 'Runtime archive may contain only regular files.' >&2; exit 1; fi
+printf '%s\n' 'Checking and unpacking the verified runtime…' >&2
 mkdir "$tmp/runtime"
 tar -xzf "$archive" -C "$tmp/runtime" --no-same-owner
 [ -f "$tmp/runtime/aximo-voice-native" ] && [ ! -L "$tmp/runtime/aximo-voice-native" ] || { echo 'Runtime executable is missing.' >&2; exit 1; }

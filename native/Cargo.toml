@@ -11,6 +11,10 @@ publish = false
 name = "aximo-voice-native"
 path = "src/main.rs"
 
+[[bin]]
+name = "aximo-voice"
+path = "src/manager.rs"
+
 [dependencies]
 anyhow = "1.0"
 aximo-audio = { git = "https://github.com/agent-axiom/aximo", rev = "eca35cc89ad00953b3e5052a885a596a7c2a05b3" }

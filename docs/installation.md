@@ -19,14 +19,15 @@ Inside an interactive Claude Code session:
 ```
 
 This adds the repository as a marketplace and opens the installation dialog.
-Restart Claude Code if prompted. Run `/av setup en` or
+Restart Claude Code if prompted. Run `/av` for the first-run language wizard, or `/av setup en` or
 `/av setup ru`. The dialog identifies the runtime/model sources and asks
 before downloading up to 1 GB of model weights. No microphone capture occurs at
 install, session start, or model setup. Your first explicit dictation requests OS
 microphone access. Rejecting it leaves an actionable error and starts no fallback.
 
-That combined `--marketplace` option is an **interactive slash command**, not a
-supported flag for the shell's `claude plugin install`. The shell equivalent is:
+The combined option is also available in the shell with Claude Code 2.1.292 or
+newer (interactive slash commands support it from 2.1.275). The explicit two-step
+shell equivalent is:
 
 ```sh
 claude plugin marketplace add agent-axiom/aximo-voice
@@ -77,7 +78,7 @@ accept the same arguments and control the same dictation session. If another
 plugin already owns one of these names, Aximo Voice leaves it alone and reports
 the unavailable name; use another listed alias from `/help`.
 
-- `/av`: start, or stop the current recording
+- `/av`: open first-run setup when needed; otherwise start, or stop the current recording
 - `/av start`: start only when idle
 - `/av stop`: stop recording and transcribe
 - `/av cancel`: stop/discard, including a pending uninserted transcript
@@ -88,3 +89,10 @@ the unavailable name; use another listed alias from `/help`.
 Use Stop/Cancel buttons while recording so the command prompt itself need not be
 changed. Insertion uses the current cursor position and preserves existing text.
 A model load happens before recording; speak only after the status says Recording.
+
+## Homebrew implementation preview
+
+The full kit and explicit `aximo-voice setup`, `doctor`, `update`, and `uninstall`
+manager are implemented for testing. See [Homebrew packaging and release gates](homebrew.md).
+There is still no published tap/release to install. CI artifacts are unsigned
+engineering previews; do not bypass operating-system security warnings.
