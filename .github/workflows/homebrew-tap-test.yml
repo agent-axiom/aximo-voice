@@ -1,0 +1,30 @@
+name: Homebrew public tap installation
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Formula/**'
+      - '.github/workflows/homebrew-tap-test.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - name: Install using the published user-facing tap commands
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: '1'
+          HOMEBREW_NO_INSTALL_CLEANUP: '1'
+        run: |
+          brew tap agent-axiom/tap https://github.com/agent-axiom/aximo-voice
+          test "$(git -C "$(brew --repository agent-axiom/tap)" rev-parse HEAD)" = "$GITHUB_SHA"
+          brew install agent-axiom/tap/aximo-voice
+          brew test agent-axiom/tap/aximo-voice
+          aximo-voice doctor --package-only
+          brew uninstall agent-axiom/tap/aximo-voice
