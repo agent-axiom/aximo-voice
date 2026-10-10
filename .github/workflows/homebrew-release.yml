@@ -1,0 +1,92 @@
+name: Publish Homebrew preview
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/homebrew-release.yml'
+      - 'scripts/prepare-homebrew-release.mjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: homebrew-preview-0.1.0
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Verify exact green source and merged ancestry
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/$GITHUB_REPOSITORY/actions/runs/38024545141 > /tmp/native-run.json
+          gh api repos/$GITHUB_REPOSITORY/actions/runs/38024545115 > /tmp/ci-run.json
+          gh api repos/$GITHUB_REPOSITORY/compare/efa540e266a92ba092ebf2f6932f9db94c9454fc...main > /tmp/ancestry.json
+          python3 - <<'PY'
+          import json
+          for path in ['/tmp/native-run.json', '/tmp/ci-run.json']:
+              run = json.load(open(path))
+              assert run['head_sha'] == 'efa540e266a92ba092ebf2f6932f9db94c9454fc'
+              assert run['status'] == 'completed' and run['conclusion'] == 'success'
+          assert json.load(open('/tmp/ancestry.json'))['status'] in ['ahead', 'identical']
+          PY
+      - uses: actions/download-artifact@v5
+        with:
+          github-token: ${{ github.token }}
+          run-id: 38024545141
+          pattern: aximo-voice-macos-*
+          path: release-input
+      - name: Prepare pinned dual-architecture formula
+        run: |
+          curl --fail --location --retry 3 https://github.com/agent-axiom/aximo-voice/archive/efa540e266a92ba092ebf2f6932f9db94c9454fc.tar.gz -o release-input/source.tar.gz
+          node scripts/prepare-homebrew-release.mjs
+          ruby -c release-output/aximo-voice.rb
+      - name: Publish exact verified preview assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view v0.1.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Existing v0.1.0 release must be reviewed rather than overwritten.' >&2
+            exit 1
+          fi
+          gh release create v0.1.0 --repo "$GITHUB_REPOSITORY" --target efa540e266a92ba092ebf2f6932f9db94c9454fc --draft --prerelease --title 'Aximo Voice 0.1.0 preview' --notes 'Checksum-verified native kits for Apple Silicon (macOS 14+) and Intel (macOS 13.4+). Unsigned preview; real microphone acceptance remains pending. No model download, microphone activation or Claude registration occurs during Homebrew installation. Run aximo-voice setup explicitly after installation.'
+          gh release upload v0.1.0 --repo "$GITHUB_REPOSITORY" release-input/aximo-voice-macos-*/dist/*kit*.tar.gz release-input/aximo-voice-macos-*/dist/*kit*.sha256 release-input/aximo-voice-macos-*/dist/*kit*.build.json release-output/aximo-voice.rb release-output/release-manifest.json
+          gh release edit v0.1.0 --repo "$GITHUB_REPOSITORY" --draft=false
+      - uses: actions/upload-artifact@v7
+        with:
+          name: homebrew-preview-formula
+          path: release-output
+          if-no-files-found: error
+  install:
+    needs: publish
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: homebrew-preview-formula
+          path: formula
+      - name: Install published assets through Homebrew and verify unchanged bytes
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: '1'
+          HOMEBREW_NO_INSTALL_CLEANUP: '1'
+        run: |
+          brew tap-new --no-git aximo-validation/ci
+          cp formula/aximo-voice.rb "$(brew --repository aximo-validation/ci)/Formula/aximo-voice.rb"
+          brew install --formula aximo-validation/ci/aximo-voice
+          brew test aximo-validation/ci/aximo-voice
+          aximo-voice doctor --package-only
+          brew uninstall aximo-validation/ci/aximo-voice
